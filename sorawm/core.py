@@ -222,19 +222,36 @@ class SoraWM:
             ## 2. E2FGVI_HQ Cleaner Strategy with overlap blending.
             input_video_loader = VideoLoader(input_video_path)
             frame_counter = 0
-            
             overlap_ratio = self.cleaner.config.overlap_ratio
             all_cleaned_frames = None
-            
-            for segment_idx, (start, end) in enumerate[tuple[int, int]](zip(bkps_full[:-1], bkps_full[1:])):
-                segment_overlap = int(overlap_ratio * (end-start+1))
-                logger.debug(f"segment_overlap: {segment_overlap}")
+            # Create overlapping segments for smooth transitions
+            num_segments = len(bkps_full) - 1
+            for segment_idx in range(num_segments):
+                seg_start = bkps_full[segment_idx]
+                seg_end = bkps_full[segment_idx + 1]
+                seg_length = seg_end - seg_start
+                # Calculate overlap size based on segment length
+                segment_overlap = max(1, int(overlap_ratio * seg_length))
+                # Extend segment boundaries to create overlap (except for first/last)
+                start = seg_start
+                end = seg_end
+
+                # Add overlap at the start (except for first segment)
+                if segment_idx > 0:
+                    start = max(seg_start - segment_overlap, bkps_full[segment_idx - 1])
+                
+                # Add overlap at the end (except for last segment)
+                if segment_idx < num_segments - 1:
+                    end = min(seg_end + segment_overlap, bkps_full[segment_idx + 2])
+                
+                if not quiet:
+                    logger.debug(f"Segment {segment_idx}: original=[{seg_start}, {seg_end}), "
+                               f"with_overlap=[{start}, {end}), overlap={segment_overlap}")
+                
                 frames = np.array(input_video_loader.get_slice(start, end))
                 # Convert BGR to RGB for E2FGVI_HQ cleaner (expects RGB format)
                 frames = frames[:, :, :, ::-1].copy()
                 
-                # masks = [np.zeros((height, width), dtype=np.uint8) for _ in range(len(frames))]
-                # masks as np to
                 masks = np.zeros((len(frames), height, width), dtype=np.uint8)
                 for idx in range(start, end):
                     bbox = frame_bboxes[idx]["bbox"]
@@ -254,19 +271,12 @@ class SoraWM:
                     is_first_chunk=(segment_idx == 0),
                 )
                 
-                # Write frames that are no longer in overlap regions
-                write_start = start
-                if segment_idx > 0:
-                    write_start = start + segment_overlap
-                    
-                # Determine which frames to write (avoid overlap with next segment)
-                next_segment_start = end
-                if segment_idx < len(bkps_full) - 2:  # Not the last segment
-                    next_segment_start = end - segment_overlap
-                else:
-                    next_segment_start = end
+                # Determine which frames to write from this segment
+                # Write the core segment (seg_start to seg_end), skip overlaps for subsequent processing
+                write_start = seg_start
+                write_end = seg_end
                 
-                for write_idx in range(write_start, next_segment_start):
+                for write_idx in range(write_start, write_end):
                     if write_idx < len(all_cleaned_frames) and all_cleaned_frames[write_idx] is not None:
                         cleaned_frame = all_cleaned_frames[write_idx]
                         # Convert RGB back to BGR for FFmpeg output (expects bgr24 format)
