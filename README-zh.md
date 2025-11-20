@@ -64,7 +64,25 @@ SoraWatermarkCleaner（后面我们简称为 `SoraWm`）由两部分组成：
 
 
 ## 2. 安装
-视频处理需要 [FFmpeg](https://ffmpeg.org/)，请先安装它。我们强烈推荐使用 `uv` 来安装环境：
+
+### 2.1 FFmpeg 配置
+
+视频处理需要 [FFmpeg](https://ffmpeg.org/)。你有两个选择：
+
+#### 方案 1：便携式 FFmpeg（推荐）
+将 FFmpeg 可执行文件直接放在项目中实现便携式配置：
+1. 从 [FFmpeg-Builds](https://github.com/BtbN/FFmpeg-Builds/releases)（Windows）或 [FFmpeg.org](https://ffmpeg.org/download.html) 下载 FFmpeg
+2. 解压并将 `ffmpeg.exe` 和 `ffprobe.exe` 复制到 `ffmpeg/` 目录
+3. 验证配置：`python test_ffmpeg_setup.py`
+
+详细说明请参见 [ffmpeg/README.md](ffmpeg/README.md)。
+
+#### 方案 2：系统级安装
+全局安装 FFmpeg 并添加到系统 PATH。项目会自动检测并使用它。
+
+### 2.2 Python 环境
+
+我们强烈推荐使用 `uv` 来安装环境：
 
 1. 安装：
 

@@ -231,3 +231,9 @@ resources/model_version.json
 .web
 examples
 resources/checkpoint
+
+# FFmpeg executables (portable version)
+ffmpeg/ffmpeg
+ffmpeg/ffmpeg.exe
+ffmpeg/ffprobe
+ffmpeg/ffprobe.exe

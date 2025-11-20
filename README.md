@@ -71,7 +71,24 @@ Our SoraWm is purely deeplearning driven and yields good results in many generat
 
 ## 2. Installation
 
-[FFmpeg](https://ffmpeg.org/) is needed for video processing, please install it first.  We highly recommend using the `uv` to install the environments:
+### 2.1 FFmpeg Setup
+
+[FFmpeg](https://ffmpeg.org/) is required for video processing. You have two options:
+
+#### Option 1: Portable FFmpeg (Recommended)
+Place FFmpeg executables directly in the project for a portable setup:
+1. Download FFmpeg from [FFmpeg-Builds](https://github.com/BtbN/FFmpeg-Builds/releases) (Windows) or [FFmpeg.org](https://ffmpeg.org/download.html)
+2. Extract and copy `ffmpeg.exe` and `ffprobe.exe` to the `ffmpeg/` directory
+3. Verify setup: `python test_ffmpeg_setup.py`
+
+See [ffmpeg/README.md](ffmpeg/README.md) for detailed instructions.
+
+#### Option 2: System-wide Installation
+Install FFmpeg system-wide and add it to your PATH. The project will automatically detect and use it.
+
+### 2.2 Python Environment
+
+We highly recommend using `uv` to install the environments:
 
 1. installation:
 

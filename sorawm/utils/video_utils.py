@@ -4,6 +4,13 @@ from typing import List, Optional
 import numpy as np
 
 import ffmpeg
+from sorawm.utils.ffmpeg_utils import get_ffmpeg_path
+
+# Get ffmpeg paths
+try:
+    _FFMPEG_BIN, _FFPROBE_BIN = get_ffmpeg_path()
+except Exception:
+    _FFMPEG_BIN, _FFPROBE_BIN = 'ffmpeg', 'ffprobe'
 
 
 def merge_frames_with_overlap(
@@ -57,7 +64,7 @@ class VideoLoader:
         self.get_video_info()
 
     def get_video_info(self):
-        probe = ffmpeg.probe(self.video_path)
+        probe = ffmpeg.probe(str(self.video_path), cmd=_FFPROBE_BIN)
         video_info = next(s for s in probe["streams"] if s["codec_type"] == "video")
         width = int(video_info["width"])
         height = int(video_info["height"])
@@ -84,10 +91,10 @@ class VideoLoader:
             return []
         start_time = start / self.fps
         process_in = (
-            ffmpeg.input(self.video_path, ss=start_time)
+            ffmpeg.input(str(self.video_path), ss=start_time)
             .output("pipe:", format="rawvideo", pix_fmt="bgr24", frames=num_frames)
             .global_args("-loglevel", "error")
-            .run_async(pipe_stdout=True)
+            .run_async(pipe_stdout=True, cmd=_FFMPEG_BIN)
         )
 
         frames = []
@@ -110,10 +117,10 @@ class VideoLoader:
 
     def __iter__(self):
         process_in = (
-            ffmpeg.input(self.video_path)
+            ffmpeg.input(str(self.video_path))
             .output("pipe:", format="rawvideo", pix_fmt="bgr24")
             .global_args("-loglevel", "error")
-            .run_async(pipe_stdout=True)
+            .run_async(pipe_stdout=True, cmd=_FFMPEG_BIN)
         )
 
         try:

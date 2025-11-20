@@ -7,6 +7,13 @@ from tqdm import tqdm
 
 import ffmpeg
 from sorawm.schemas import CleanerType
+from sorawm.utils.ffmpeg_utils import configure_ffmpeg_environment, get_ffmpeg_path
+
+# Get FFmpeg binary paths for use in ffmpeg-python calls
+try:
+    _FFMPEG_BIN, _FFPROBE_BIN = get_ffmpeg_path()
+except Exception:
+    _FFMPEG_BIN, _FFPROBE_BIN = 'ffmpeg', 'ffprobe'
 from sorawm.utils.imputation_utils import (find_2d_data_bkps,
                                            find_idxs_interval,
                                            get_interval_average_bbox)
@@ -19,6 +26,13 @@ VIDEO_EXTENSIONS = [".mp4", ".avi", ".mov", ".mkv", ".flv", ".wmv", ".webm"]
 
 class SoraWM:
     def __init__(self, cleaner_type: CleanerType = CleanerType.LAMA):
+        # Configure FFmpeg to use local installation if available
+        try:
+            configure_ffmpeg_environment()
+        except RuntimeError as e:
+            logger.error(f"FFmpeg configuration failed: {e}")
+            raise
+
         self.detector = SoraWaterMarkDetector()
         self.cleaner = WaterMarkCleaner(cleaner_type)
         self.cleaner_type = cleaner_type
@@ -110,7 +124,7 @@ class SoraWM:
             .output(str(temp_output_path), **output_options)
             .overwrite_output()
             .global_args("-loglevel", "error")
-            .run_async(pipe_stdin=True)
+            .run_async(pipe_stdin=True, cmd=_FFMPEG_BIN)
         )
 
         frame_bboxes = {}
@@ -316,7 +330,7 @@ class SoraWM:
                 acodec="aac",
             )
             .overwrite_output()
-            .run(quiet=True)
+            .run(quiet=True, cmd=_FFMPEG_BIN)
         )
         temp_output_path.unlink()
         logger.info(f"Saved no watermark video with audio at: {output_video_path}")
