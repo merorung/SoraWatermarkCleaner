@@ -91,6 +91,7 @@ class SoraWM:
         output_video_path: Path,
         progress_callback: Callable[[int], None] | None = None,
         quiet: bool = False,
+        manual_bbox: tuple[int, int, int, int] | list[tuple[int, int, int, int]] | None = None,
     ):
         input_video_loader = VideoLoader(input_video_path)
         output_video_path.parent.mkdir(parents=True, exist_ok=True)
@@ -131,38 +132,64 @@ class SoraWM:
         detect_missed = []
         bbox_centers = []
         bboxes = []
+
         if not quiet:
             logger.debug(
                 f"total frames: {total_frames}, fps: {fps}, width: {width}, height: {height}"
             )
-        for idx, frame in enumerate(
-            tqdm(
-                input_video_loader,
-                total=total_frames,
-                desc="Detect watermarks",
-                disable=quiet,
-            )
-        ):
-            detection_result = self.detector.detect(frame)
-            if detection_result["detected"]:
-                frame_bboxes[idx] = {"bbox": detection_result["bbox"]}
-                x1, y1, x2, y2 = detection_result["bbox"]
-                bbox_centers.append((int((x1 + x2) / 2), int((y1 + y2) / 2)))
-                bboxes.append((x1, y1, x2, y2))
 
+        # Use manual bbox if provided
+        if manual_bbox is not None:
+            # Support both single bbox and multiple bboxes
+            if isinstance(manual_bbox, list):
+                # Multiple bboxes: merge them into one combined mask
+                if not quiet:
+                    logger.info(f"Using {len(manual_bbox)} manual bboxes: {manual_bbox}")
+                # For each frame, store the list of bboxes
+                for idx in range(total_frames):
+                    frame_bboxes[idx] = {"bbox": manual_bbox}
             else:
-                frame_bboxes[idx] = {"bbox": None}
-                detect_missed.append(idx)
-                bbox_centers.append(None)
-                bboxes.append(None)
-            # 10% - 50%
-            if progress_callback and idx % 10 == 0:
-                progress = 10 + int((idx / total_frames) * 40)
-                progress_callback(progress)
+                # Single bbox
+                if not quiet:
+                    logger.info(f"Using manual bbox: {manual_bbox}")
+                # Fill all frames with the same bbox
+                for idx in range(total_frames):
+                    frame_bboxes[idx] = {"bbox": manual_bbox}
+            # Skip detection progress and jump directly to 50%
+            if progress_callback:
+                progress_callback(50)
+        else:
+            # Auto detection mode
+            for idx, frame in enumerate(
+                tqdm(
+                    input_video_loader,
+                    total=total_frames,
+                    desc="Detect watermarks",
+                    disable=quiet,
+                )
+            ):
+                detection_result = self.detector.detect(frame)
+                if detection_result["detected"]:
+                    frame_bboxes[idx] = {"bbox": detection_result["bbox"]}
+                    x1, y1, x2, y2 = detection_result["bbox"]
+                    bbox_centers.append((int((x1 + x2) / 2), int((y1 + y2) / 2)))
+                    bboxes.append((x1, y1, x2, y2))
+
+                else:
+                    frame_bboxes[idx] = {"bbox": None}
+                    detect_missed.append(idx)
+                    bbox_centers.append(None)
+                    bboxes.append(None)
+                # 10% - 50%
+                if progress_callback and idx % 10 == 0:
+                    progress = 10 + int((idx / total_frames) * 40)
+                    progress_callback(progress)
         if not quiet:
             logger.debug(f"detect missed frames: {detect_missed}")
         bkps_full = [0, total_frames]
-        if detect_missed:
+
+        # Skip imputation if using manual bbox
+        if manual_bbox is None and detect_missed:
             # 1. find the bkps of the bbox centers
             bkps = find_2d_data_bkps(bbox_centers)
             # add the start and end position, to form the complete interval boundaries
@@ -208,8 +235,14 @@ class SoraWM:
             del detect_missed
 
         if self.cleaner_type == CleanerType.LAMA:
-            ## 1. Lama Cleaner Strategy.
+            ## 1. Lama Cleaner Strategy with mask dilation for better quality.
+            import cv2
             input_video_loader = VideoLoader(input_video_path)
+            # Kernel size for mask dilation (larger = more aggressive cleaning, but may affect surrounding area)
+            # 15-20 is good balance for Sora watermarks
+            kernel_size = 17
+            kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (kernel_size, kernel_size))
+
             for idx, frame in enumerate(
                 tqdm(
                     input_video_loader,
@@ -220,9 +253,20 @@ class SoraWM:
             ):
                 bbox = frame_bboxes[idx]["bbox"]
                 if bbox is not None:
-                    x1, y1, x2, y2 = bbox
                     mask = np.zeros((height, width), dtype=np.uint8)
-                    mask[y1:y2, x1:x2] = 255
+
+                    # Handle multiple bboxes
+                    if isinstance(bbox, list):
+                        # Multiple bboxes: merge into single mask
+                        for x1, y1, x2, y2 in bbox:
+                            mask[y1:y2, x1:x2] = 255
+                    else:
+                        # Single bbox
+                        x1, y1, x2, y2 = bbox
+                        mask[y1:y2, x1:x2] = 255
+
+                    # Dilate mask to cover more area around watermark edges
+                    mask = cv2.dilate(mask, kernel, iterations=1)
                     cleaned_frame = self.cleaner.clean(frame, mask)
                 else:
                     cleaned_frame = frame
@@ -270,10 +314,16 @@ class SoraWM:
                 for idx in range(start, end):
                     bbox = frame_bboxes[idx]["bbox"]
                     if bbox is not None:
-                        x1, y1, x2, y2 = bbox
-                        # offset
                         idx_offset = idx - start
-                        masks[idx_offset][y1:y2, x1:x2] = 255
+                        # Handle multiple bboxes
+                        if isinstance(bbox, list):
+                            # Multiple bboxes: merge into single mask
+                            for x1, y1, x2, y2 in bbox:
+                                masks[idx_offset][y1:y2, x1:x2] = 255
+                        else:
+                            # Single bbox
+                            x1, y1, x2, y2 = bbox
+                            masks[idx_offset][y1:y2, x1:x2] = 255
 
                 # Progress callback for E2FGVI_HQ processing
                 # 50% - 95% range
