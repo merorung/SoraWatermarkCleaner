@@ -253,19 +253,19 @@ class SoraWM:
                 # Add overlap at the start (except for first segment)
                 if segment_idx > 0:
                     start = max(seg_start - segment_overlap, bkps_full[segment_idx - 1])
-                
+
                 # Add overlap at the end (except for last segment)
                 if segment_idx < num_segments - 1:
                     end = min(seg_end + segment_overlap, bkps_full[segment_idx + 2])
-                
+
                 if not quiet:
                     logger.debug(f"Segment {segment_idx}: original=[{seg_start}, {seg_end}), "
                                f"with_overlap=[{start}, {end}), overlap={segment_overlap}")
-                
+
                 frames = np.array(input_video_loader.get_slice(start, end))
                 # Convert BGR to RGB for E2FGVI_HQ cleaner (expects RGB format)
                 frames = frames[:, :, :, ::-1].copy()
-                
+
                 masks = np.zeros((len(frames), height, width), dtype=np.uint8)
                 for idx in range(start, end):
                     bbox = frame_bboxes[idx]["bbox"]
@@ -274,6 +274,13 @@ class SoraWM:
                         # offset
                         idx_offset = idx - start
                         masks[idx_offset][y1:y2, x1:x2] = 255
+
+                # Progress callback for E2FGVI_HQ processing
+                # 50% - 95% range
+                if progress_callback:
+                    progress = 50 + int((segment_idx / num_segments) * 45)
+                    progress_callback(progress)
+
                 cleaned_frames = self.cleaner.clean(frames, masks)
                 
                 # Merge with overlap blending support

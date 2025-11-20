@@ -16,7 +16,7 @@ class WatermarkCleanerGUI:
     def __init__(self, root):
         self.root = root
         self.root.title("소라 워터마크 제거기")
-        self.root.geometry("650x450")
+        self.root.geometry("650x500")
         self.root.resizable(False, False)
 
         # Variables
