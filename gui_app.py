@@ -11,14 +11,14 @@ import cv2
 import numpy as np
 from PIL import Image, ImageTk
 
-from sorawm.core import SoraWM
+from sorawm.core import SoraWM, IMAGE_EXTENSIONS
 from sorawm.schemas import CleanerType
 
 
 class WatermarkCleanerGUI:
     def __init__(self, root):
         self.root = root
-        self.root.title("소라 워터마크 제거기")
+        self.root.title("소라 워터마크 제거기 v2.0 (이미지+비디오)")
         self.root.geometry("650x650")
         self.root.resizable(False, False)
 
@@ -170,7 +170,7 @@ class WatermarkCleanerGUI:
         input_frame = tk.Frame(content_frame)
         input_frame.pack(fill=tk.X, pady=(0, 10))
 
-        tk.Label(input_frame, text="입력 비디오:", font=("맑은 고딕", 10, "bold")).pack(anchor=tk.W)
+        tk.Label(input_frame, text="입력 파일:", font=("맑은 고딕", 10, "bold")).pack(anchor=tk.W)
 
         input_path_frame = tk.Frame(input_frame)
         input_path_frame.pack(fill=tk.X, pady=(5, 0))
@@ -230,9 +230,11 @@ class WatermarkCleanerGUI:
 
     def select_input_file(self):
         filename = filedialog.askopenfilename(
-            title="입력 비디오 선택",
+            title="입력 파일 선택 (비디오 또는 이미지)",
             filetypes=[
-                ("비디오 파일", "*.mp4 *.avi *.mov *.mkv"),
+                ("모든 미디어 파일", "*.mp4 *.avi *.mov *.mkv *.flv *.wmv *.webm *.jpg *.jpeg *.png *.webp *.bmp *.tiff *.tif"),
+                ("비디오 파일", "*.mp4 *.avi *.mov *.mkv *.flv *.wmv *.webm"),
+                ("이미지 파일", "*.jpg *.jpeg *.png *.webp *.bmp *.tiff *.tif"),
                 ("모든 파일", "*.*")
             ]
         )
@@ -291,7 +293,7 @@ class WatermarkCleanerGUI:
         """Start video processing"""
         # Validation
         if not self.input_path:
-            messagebox.showwarning("경고", "입력 비디오 파일을 선택하세요.")
+            messagebox.showwarning("경고", "입력 파일을 선택하세요.")
             return
 
         if not self.input_path.exists():
@@ -408,26 +410,39 @@ class WatermarkCleanerGUI:
             )
 
     def select_watermark_area(self):
-        """Open window to manually select watermark area with video playback"""
+        """Open window to manually select watermark area with video/image preview"""
         if not self.input_path or not self.input_path.exists():
-            messagebox.showwarning("경고", "먼저 비디오 파일을 선택하세요.")
+            messagebox.showwarning("경고", "먼저 파일을 선택하세요.")
             return
 
-        # Open video
-        cap = cv2.VideoCapture(str(self.input_path))
-        if not cap.isOpened():
-            messagebox.showerror("오류", "비디오를 열 수 없습니다.")
-            return
+        # Check if input is image or video
+        is_image = self.input_path.suffix.lower() in IMAGE_EXTENSIONS
 
-        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        fps = cap.get(cv2.CAP_PROP_FPS)
+        if is_image:
+            # Load image
+            frame = cv2.imread(str(self.input_path))
+            if frame is None:
+                messagebox.showerror("오류", "이미지를 열 수 없습니다.")
+                return
+            total_frames = 1
+            fps = 0
+            cap = None
+        else:
+            # Open video
+            cap = cv2.VideoCapture(str(self.input_path))
+            if not cap.isOpened():
+                messagebox.showerror("오류", "비디오를 열 수 없습니다.")
+                return
 
-        # Read first frame
-        ret, frame = cap.read()
-        if not ret:
-            messagebox.showerror("오류", "비디오 첫 프레임을 읽을 수 없습니다.")
-            cap.release()
-            return
+            total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+            fps = cap.get(cv2.CAP_PROP_FPS)
+
+            # Read first frame
+            ret, frame = cap.read()
+            if not ret:
+                messagebox.showerror("오류", "비디오 첫 프레임을 읽을 수 없습니다.")
+                cap.release()
+                return
 
         # Create selection window
         self.selection_window = tk.Toplevel(self.root)
@@ -445,10 +460,15 @@ class WatermarkCleanerGUI:
         )
         instruction_label.pack()
 
-        # Video info
+        # Video/Image info
+        if is_image:
+            info_text = "이미지 파일"
+        else:
+            info_text = f"총 {total_frames} 프레임, {fps:.1f} FPS"
+
         info_label = tk.Label(
             instruction_frame,
-            text=f"총 {total_frames} 프레임, {fps:.1f} FPS",
+            text=info_text,
             font=("맑은 고딕", 9),
             fg="gray"
         )
@@ -538,62 +558,63 @@ class WatermarkCleanerGUI:
         canvas.bind("<B1-Motion>", on_mouse_drag)
         canvas.bind("<ButtonRelease-1>", on_mouse_up)
 
-        # Control frame
-        control_frame = tk.Frame(self.selection_window)
-        control_frame.pack(fill=tk.X, padx=10, pady=5)
+        # Control frame (only for videos)
+        if not is_image:
+            control_frame = tk.Frame(self.selection_window)
+            control_frame.pack(fill=tk.X, padx=10, pady=5)
 
-        # Frame slider
-        slider_frame = tk.Frame(control_frame)
-        slider_frame.pack(fill=tk.X, pady=(0, 5))
+            # Frame slider
+            slider_frame = tk.Frame(control_frame)
+            slider_frame.pack(fill=tk.X, pady=(0, 5))
 
-        self.frame_slider = tk.Scale(
-            slider_frame,
-            from_=0,
-            to=total_frames - 1,
-            orient=tk.HORIZONTAL,
-            command=self.on_slider_change,
-            length=display_w - 100
-        )
-        self.frame_slider.pack(side=tk.LEFT, fill=tk.X, expand=True)
+            self.frame_slider = tk.Scale(
+                slider_frame,
+                from_=0,
+                to=total_frames - 1,
+                orient=tk.HORIZONTAL,
+                command=self.on_slider_change,
+                length=display_w - 100
+            )
+            self.frame_slider.pack(side=tk.LEFT, fill=tk.X, expand=True)
 
-        self.frame_label = tk.Label(
-            slider_frame,
-            text=f"0 / {total_frames}",
-            font=("맑은 고딕", 9),
-            width=15
-        )
-        self.frame_label.pack(side=tk.RIGHT)
+            self.frame_label = tk.Label(
+                slider_frame,
+                text=f"0 / {total_frames}",
+                font=("맑은 고딕", 9),
+                width=15
+            )
+            self.frame_label.pack(side=tk.RIGHT)
 
-        # Playback controls
-        playback_frame = tk.Frame(control_frame)
-        playback_frame.pack()
+            # Playback controls
+            playback_frame = tk.Frame(control_frame)
+            playback_frame.pack()
 
-        self.play_btn = tk.Button(
-            playback_frame,
-            text="▶ 재생",
-            command=self.toggle_play,
-            font=("맑은 고딕", 9),
-            width=10
-        )
-        self.play_btn.pack(side=tk.LEFT, padx=5)
+            self.play_btn = tk.Button(
+                playback_frame,
+                text="▶ 재생",
+                command=self.toggle_play,
+                font=("맑은 고딕", 9),
+                width=10
+            )
+            self.play_btn.pack(side=tk.LEFT, padx=5)
 
-        prev_btn = tk.Button(
-            playback_frame,
-            text="◀ 이전",
-            command=lambda: self.seek_frame(-10),
-            font=("맑은 고딕", 9),
-            width=10
-        )
-        prev_btn.pack(side=tk.LEFT, padx=5)
+            prev_btn = tk.Button(
+                playback_frame,
+                text="◀ 이전",
+                command=lambda: self.seek_frame(-10),
+                font=("맑은 고딕", 9),
+                width=10
+            )
+            prev_btn.pack(side=tk.LEFT, padx=5)
 
-        next_btn = tk.Button(
-            playback_frame,
-            text="다음 ▶",
-            command=lambda: self.seek_frame(10),
-            font=("맑은 고딕", 9),
-            width=10
-        )
-        next_btn.pack(side=tk.LEFT, padx=5)
+            next_btn = tk.Button(
+                playback_frame,
+                text="다음 ▶",
+                command=lambda: self.seek_frame(10),
+                font=("맑은 고딕", 9),
+                width=10
+            )
+            next_btn.pack(side=tk.LEFT, padx=5)
 
         # Selected bboxes list
         bbox_frame = tk.LabelFrame(
@@ -822,7 +843,7 @@ class WatermarkCleanerGUI:
         return True  # Continue processing
 
     def process_video_thread(self):
-        """Process video in a separate thread"""
+        """Process video or image in a separate thread"""
         try:
             # Initialize model if not already done
             if not self.sora_wm or self.sora_wm.cleaner_type != self.model_var.get():
@@ -834,22 +855,40 @@ class WatermarkCleanerGUI:
             if self.cancel_requested:
                 raise InterruptedError("작업이 취소되었습니다.")
 
-            # Process the video to temp location
-            if self.detection_mode.get() == "manual" and self.manual_bbox:
-                # Manual mode: use fixed bbox
-                self.sora_wm.run(
-                    self.input_path,
-                    self.temp_output_path,
-                    progress_callback=self.update_progress,
-                    manual_bbox=self.manual_bbox
-                )
+            # Check if input is image or video
+            is_image = self.input_path.suffix.lower() in IMAGE_EXTENSIONS
+
+            # Process the file to temp location
+            if is_image:
+                # Image processing
+                if self.detection_mode.get() == "manual" and self.manual_bbox:
+                    self.sora_wm.run_image(
+                        self.input_path,
+                        self.temp_output_path,
+                        progress_callback=self.update_progress,
+                        manual_bbox=self.manual_bbox
+                    )
+                else:
+                    self.sora_wm.run_image(
+                        self.input_path,
+                        self.temp_output_path,
+                        progress_callback=self.update_progress
+                    )
             else:
-                # Auto mode: use AI detection
-                self.sora_wm.run(
-                    self.input_path,
-                    self.temp_output_path,
-                    progress_callback=self.update_progress
-                )
+                # Video processing
+                if self.detection_mode.get() == "manual" and self.manual_bbox:
+                    self.sora_wm.run(
+                        self.input_path,
+                        self.temp_output_path,
+                        progress_callback=self.update_progress,
+                        manual_bbox=self.manual_bbox
+                    )
+                else:
+                    self.sora_wm.run(
+                        self.input_path,
+                        self.temp_output_path,
+                        progress_callback=self.update_progress
+                    )
 
             # Check if cancelled during processing
             if self.cancel_requested:
