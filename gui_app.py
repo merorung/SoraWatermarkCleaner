@@ -30,6 +30,8 @@ class WatermarkCleanerGUI:
         self.cancel_requested = False  # Flag for cancellation
         self.has_gpu = torch.cuda.is_available()
         self.manual_bbox = None  # (x1, y1, x2, y2) for manual selection
+        self.app_state = "READY"  # States: READY, PROCESSING, COMPLETED
+        self.temp_output_path = None  # Store temp path for completed processing
 
         self.setup_ui()
 
@@ -74,27 +76,52 @@ class WatermarkCleanerGUI:
 
         lama_radio = tk.Radiobutton(
             model_frame,
-            text="🚀 LAMA (빠름, 좋은 품질)",
+            text="🚀 LAMA (빠름, 기본 품질)",
             variable=self.model_var,
             value=CleanerType.LAMA,
             font=("맑은 고딕", 10)
         )
         lama_radio.pack(anchor=tk.W)
 
-        # E2FGVI option with GPU warning
-        e2fgvi_text = "💎 E2FGVI-HQ (최고 품질, 시간 일관성 보장)"
-        if not self.has_gpu:
-            e2fgvi_text += " ⚠️ GPU 필요 - CPU에서는 매우 느림"
+        # MAT option
+        mat_radio = tk.Radiobutton(
+            model_frame,
+            text="⭐ MAT (빠름, LAMA보다 좋은 품질)",
+            variable=self.model_var,
+            value=CleanerType.MAT,
+            font=("맑은 고딕", 10)
+        )
+        mat_radio.pack(anchor=tk.W)
 
-        e2fgvi_radio = tk.Radiobutton(
+        # E2FGVI option (faster version)
+        e2fgvi_text = "🌟 E2FGVI (좋은 품질, 시간 일관성, HQ보다 2-3배 빠름)"
+        if not self.has_gpu:
+            e2fgvi_text += " ⚠️ GPU 권장"
+
+        e2fgvi_std_radio = tk.Radiobutton(
             model_frame,
             text=e2fgvi_text,
+            variable=self.model_var,
+            value=CleanerType.E2FGVI,
+            font=("맑은 고딕", 10),
+            fg="gray" if not self.has_gpu else "black"
+        )
+        e2fgvi_std_radio.pack(anchor=tk.W)
+
+        # E2FGVI-HQ option with GPU warning
+        e2fgvi_hq_text = "💎 E2FGVI-HQ (최고 품질, 완벽한 시간 일관성, 가장 느림)"
+        if not self.has_gpu:
+            e2fgvi_hq_text += " ⚠️ GPU 필요 - CPU에서는 매우 느림"
+
+        e2fgvi_hq_radio = tk.Radiobutton(
+            model_frame,
+            text=e2fgvi_hq_text,
             variable=self.model_var,
             value=CleanerType.E2FGVI_HQ,
             font=("맑은 고딕", 10),
             fg="gray" if not self.has_gpu else "black"
         )
-        e2fgvi_radio.pack(anchor=tk.W)
+        e2fgvi_hq_radio.pack(anchor=tk.W)
 
         # Detection mode selection
         detection_frame = tk.LabelFrame(content_frame, text="워터마크 감지 방식", padx=10, pady=10, font=("맑은 고딕", 9, "bold"))
@@ -167,33 +194,7 @@ class WatermarkCleanerGUI:
         )
         input_btn.pack(side=tk.RIGHT)
 
-        # Output file selection
-        output_frame = tk.Frame(content_frame)
-        output_frame.pack(fill=tk.X, pady=(0, 20))
-
-        tk.Label(output_frame, text="출력 비디오:", font=("맑은 고딕", 10, "bold")).pack(anchor=tk.W)
-
-        output_path_frame = tk.Frame(output_frame)
-        output_path_frame.pack(fill=tk.X, pady=(5, 0))
-
-        self.output_label = tk.Label(
-            output_path_frame,
-            text="파일을 선택하세요",
-            font=("맑은 고딕", 9),
-            fg="gray",
-            anchor=tk.W,
-            width=50
-        )
-        self.output_label.pack(side=tk.LEFT, padx=(0, 10))
-
-        output_btn = tk.Button(
-            output_path_frame,
-            text="저장 위치...",
-            command=self.select_output_file,
-            width=12,
-            font=("맑은 고딕", 9)
-        )
-        output_btn.pack(side=tk.RIGHT)
+        # Note: Output file selection removed - will be done after processing
 
         # Progress section
         progress_frame = tk.Frame(content_frame)
@@ -214,34 +215,18 @@ class WatermarkCleanerGUI:
         )
         self.progress_bar.pack(fill=tk.X)
 
-        # Process and Cancel buttons
-        button_frame = tk.Frame(content_frame)
-        button_frame.pack(fill=tk.X)
-
-        self.process_btn = tk.Button(
-            button_frame,
-            text="🚀 워터마크 제거하기",
-            command=self.process_video,
-            font=("맑은 고딕", 12, "bold"),
+        # Main action button (changes based on state)
+        self.action_btn = tk.Button(
+            content_frame,
+            text="🚀 워터마크 제거 시작",
+            command=self.handle_action_button,
+            font=("맑은 고딕", 14, "bold"),
             bg="#27ae60",
             fg="white",
             height=2,
             cursor="hand2"
         )
-        self.process_btn.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
-
-        self.cancel_btn = tk.Button(
-            button_frame,
-            text="⏹ 취소",
-            command=self.cancel_processing,
-            font=("맑은 고딕", 12, "bold"),
-            bg="#e74c3c",
-            fg="white",
-            height=2,
-            cursor="hand2",
-            state=tk.DISABLED
-        )
-        self.cancel_btn.pack(side=tk.RIGHT, fill=tk.X, expand=True, padx=(5, 0))
+        self.action_btn.pack(fill=tk.X)
 
     def select_input_file(self):
         filename = filedialog.askopenfilename(
@@ -263,15 +248,142 @@ class WatermarkCleanerGUI:
             self.manual_bbox = None
             self.manual_status_label.config(text="")
 
-            # Auto-suggest output filename
-            if not self.output_path:
-                output_name = f"cleaned_{self.input_path.name}"
-                suggested_output = self.input_path.parent / output_name
-                self.output_path = suggested_output
-                self.output_label.config(
-                    text=output_name,
-                    fg="black"
+            # Reset state when new video is selected
+            self.app_state = "READY"
+            self.update_action_button()
+            self.output_path = None
+            self.temp_output_path = None
+
+    def update_action_button(self):
+        """Update the action button appearance based on current state"""
+        if self.app_state == "READY":
+            self.action_btn.config(
+                text="🚀 워터마크 제거 시작",
+                bg="#27ae60",
+                fg="white",
+                state=tk.NORMAL
+            )
+        elif self.app_state == "PROCESSING":
+            self.action_btn.config(
+                text="⏹ 취소",
+                bg="#e74c3c",
+                fg="white",
+                state=tk.NORMAL
+            )
+        elif self.app_state == "COMPLETED":
+            self.action_btn.config(
+                text="💾 저장하기",
+                bg="#3498db",
+                fg="white",
+                state=tk.NORMAL
+            )
+
+    def handle_action_button(self):
+        """Handle action button click based on current state"""
+        if self.app_state == "READY":
+            self.start_processing()
+        elif self.app_state == "PROCESSING":
+            self.cancel_processing()
+        elif self.app_state == "COMPLETED":
+            self.save_processed_file()
+
+    def start_processing(self):
+        """Start video processing"""
+        # Validation
+        if not self.input_path:
+            messagebox.showwarning("경고", "입력 비디오 파일을 선택하세요.")
+            return
+
+        if not self.input_path.exists():
+            messagebox.showerror("오류", "입력 파일이 존재하지 않습니다.")
+            return
+
+        if self.processing:
+            messagebox.showinfo("알림", "이미 처리 중입니다.")
+            return
+
+        # Check if manual mode is selected but no area specified
+        if self.detection_mode.get() == "manual" and not self.manual_bbox:
+            messagebox.showwarning("경고", "수동 선택 모드에서는 워터마크 영역을 먼저 선택해야 합니다.")
+            return
+
+        # Warn if using E2FGVI models on CPU
+        if self.model_var.get() in [CleanerType.E2FGVI, CleanerType.E2FGVI_HQ] and not self.has_gpu:
+            model_name = "E2FGVI-HQ" if self.model_var.get() == CleanerType.E2FGVI_HQ else "E2FGVI"
+            result = messagebox.askyesno(
+                "경고",
+                f"{model_name} 모델은 CPU에서 매우 느립니다.\n"
+                "처리 시간이 매우 오래 걸릴 수 있습니다.\n\n"
+                "계속하시겠습니까?"
+            )
+            if not result:
+                return
+
+        # Create temporary output path
+        self.temp_output_path = self.input_path.parent / f"temp_processed_{self.input_path.name}"
+
+        # Start processing in a separate thread
+        self.processing = True
+        self.cancel_requested = False
+        self.app_state = "PROCESSING"
+        self.update_action_button()
+        self.progress_bar['value'] = 0
+
+        thread = threading.Thread(target=self.process_video_thread, daemon=True)
+        thread.start()
+
+    def save_processed_file(self):
+        """Save the processed file to user-selected location"""
+        if not self.temp_output_path or not self.temp_output_path.exists():
+            messagebox.showerror("오류", "처리된 파일을 찾을 수 없습니다.")
+            self.app_state = "READY"
+            self.update_action_button()
+            return
+
+        # Open save dialog
+        initial_name = f"cleaned_{self.input_path.name}" if self.input_path else "output.mp4"
+        initial_dir = self.input_path.parent if self.input_path else None
+
+        filename = filedialog.asksaveasfilename(
+            title="처리된 비디오 저장",
+            initialfile=initial_name,
+            initialdir=initial_dir,
+            defaultextension=".mp4",
+            filetypes=[
+                ("MP4 파일", "*.mp4"),
+                ("AVI 파일", "*.avi"),
+                ("모든 파일", "*.*")
+            ]
+        )
+
+        if filename:
+            try:
+                final_path = Path(filename)
+                # Move temp file to final location
+                import shutil
+                shutil.move(str(self.temp_output_path), str(final_path))
+
+                file_size = final_path.stat().st_size / (1024 * 1024)  # MB
+                messagebox.showinfo(
+                    "저장 완료",
+                    f"파일이 저장되었습니다!\n\n"
+                    f"파일: {final_path.name}\n"
+                    f"크기: {file_size:.2f} MB\n"
+                    f"위치: {final_path.parent}"
                 )
+
+                # Reset to ready state
+                self.app_state = "READY"
+                self.update_action_button()
+                self.progress_bar['value'] = 0
+                self.progress_label.config(text="준비 완료", fg="green")
+                self.temp_output_path = None
+
+            except Exception as e:
+                messagebox.showerror("저장 오류", f"파일 저장 중 오류가 발생했습니다:\n\n{str(e)}")
+        else:
+            # User cancelled save - temp file still exists, keep in COMPLETED state
+            pass
 
     def select_output_file(self):
         initial_name = f"cleaned_{self.input_path.name}" if self.input_path else "output.mp4"
@@ -722,12 +834,12 @@ class WatermarkCleanerGUI:
             if self.cancel_requested:
                 raise InterruptedError("작업이 취소되었습니다.")
 
-            # Process the video
+            # Process the video to temp location
             if self.detection_mode.get() == "manual" and self.manual_bbox:
                 # Manual mode: use fixed bbox
                 self.sora_wm.run(
                     self.input_path,
-                    self.output_path,
+                    self.temp_output_path,
                     progress_callback=self.update_progress,
                     manual_bbox=self.manual_bbox
                 )
@@ -735,7 +847,7 @@ class WatermarkCleanerGUI:
                 # Auto mode: use AI detection
                 self.sora_wm.run(
                     self.input_path,
-                    self.output_path,
+                    self.temp_output_path,
                     progress_callback=self.update_progress
                 )
 
@@ -743,88 +855,57 @@ class WatermarkCleanerGUI:
             if self.cancel_requested:
                 raise InterruptedError("작업이 취소되었습니다.")
 
-            # Success
-            self.progress_bar['value'] = 100
-            self.progress_label.config(text="✅ 처리 완료!", fg="green")
+            # Success - verify temp file exists
+            if self.temp_output_path.exists():
+                file_size = self.temp_output_path.stat().st_size / (1024 * 1024)  # MB
+                self.progress_bar['value'] = 100
+                self.progress_label.config(text=f"✅ 처리 완료! ({file_size:.1f} MB)", fg="green")
 
-            messagebox.showinfo(
-                "완료",
-                f"워터마크가 성공적으로 제거되었습니다!\n\n저장 위치:\n{self.output_path}"
-            )
+                # Change to COMPLETED state
+                self.app_state = "COMPLETED"
+                self.update_action_button()
+            else:
+                raise RuntimeError("처리된 파일을 찾을 수 없습니다.")
 
         except InterruptedError as e:
-            # Clean up partial output
-            if self.output_path and self.output_path.exists():
+            # Clean up temp file on cancellation
+            if self.temp_output_path and self.temp_output_path.exists():
                 try:
-                    self.output_path.unlink()
+                    self.temp_output_path.unlink()
                 except:
                     pass
-            # Clean up temp file
-            if self.output_path:
-                temp_output = self.output_path.parent / f"temp_{self.output_path.name}"
-                if temp_output.exists():
+            # Also clean up the temp file created by core.py
+            if self.temp_output_path:
+                core_temp = self.temp_output_path.parent / f"temp_{self.temp_output_path.name}"
+                if core_temp.exists():
                     try:
-                        temp_output.unlink()
+                        core_temp.unlink()
                     except:
                         pass
 
             self.progress_bar['value'] = 0
             self.progress_label.config(text="⏹ 작업이 취소되었습니다.", fg="orange")
+            self.app_state = "READY"
+            self.update_action_button()
             messagebox.showinfo("취소됨", str(e))
 
         except Exception as e:
             self.progress_label.config(text=f"❌ 오류: {str(e)}", fg="red")
+            self.app_state = "READY"
+            self.update_action_button()
             messagebox.showerror("오류", f"오류가 발생했습니다:\n\n{str(e)}")
+
+            # Clean up temp file on error
+            if self.temp_output_path and self.temp_output_path.exists():
+                try:
+                    self.temp_output_path.unlink()
+                except:
+                    pass
 
         finally:
             self.processing = False
             self.cancel_requested = False
-            self.process_btn.config(state=tk.NORMAL, bg="#27ae60")
-            self.cancel_btn.config(state=tk.DISABLED)
 
-    def process_video(self):
-        # Validation
-        if not self.input_path:
-            messagebox.showwarning("경고", "입력 비디오 파일을 선택하세요.")
-            return
-
-        if not self.output_path:
-            messagebox.showwarning("경고", "출력 위치를 선택하세요.")
-            return
-
-        if not self.input_path.exists():
-            messagebox.showerror("오류", "입력 파일이 존재하지 않습니다.")
-            return
-
-        if self.processing:
-            messagebox.showinfo("알림", "이미 처리 중입니다.")
-            return
-
-        # Check if manual mode is selected but no area specified
-        if self.detection_mode.get() == "manual" and not self.manual_bbox:
-            messagebox.showwarning("경고", "수동 선택 모드에서는 워터마크 영역을 먼저 선택해야 합니다.")
-            return
-
-        # Warn if using E2FGVI on CPU
-        if self.model_var.get() == CleanerType.E2FGVI_HQ and not self.has_gpu:
-            result = messagebox.askyesno(
-                "경고",
-                "E2FGVI-HQ 모델은 CPU에서 매우 느립니다.\n"
-                "처리 시간이 매우 오래 걸릴 수 있습니다.\n\n"
-                "계속하시겠습니까?"
-            )
-            if not result:
-                return
-
-        # Start processing in a separate thread
-        self.processing = True
-        self.cancel_requested = False
-        self.process_btn.config(state=tk.DISABLED, bg="gray")
-        self.cancel_btn.config(state=tk.NORMAL)
-        self.progress_bar['value'] = 0
-
-        thread = threading.Thread(target=self.process_video_thread, daemon=True)
-        thread.start()
 
 
 def main():

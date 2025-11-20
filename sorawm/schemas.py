@@ -3,4 +3,6 @@ from enum import StrEnum
 
 class CleanerType(StrEnum):
     LAMA = "lama"
-    E2FGVI_HQ = "e2fgvi_hq"
+    MAT = "mat"
+    E2FGVI = "e2fgvi"  # Faster version
+    E2FGVI_HQ = "e2fgvi_hq"  # Highest quality

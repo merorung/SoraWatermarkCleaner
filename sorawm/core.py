@@ -236,8 +236,8 @@ class SoraWM:
             del bbox_centers
             del detect_missed
 
-        if self.cleaner_type == CleanerType.LAMA:
-            ## 1. Lama Cleaner Strategy with mask dilation for better quality.
+        if self.cleaner_type in [CleanerType.LAMA, CleanerType.MAT]:
+            ## 1. Image-based Cleaner Strategy (LAMA/MAT) with mask dilation for better quality.
             import cv2
             input_video_loader = VideoLoader(input_video_path)
             # Kernel size for mask dilation (larger = more aggressive cleaning, but may affect surrounding area)
@@ -279,7 +279,7 @@ class SoraWM:
                     progress = 50 + int((idx / total_frames) * 45)
                     if progress_callback(progress) == False:
                         raise InterruptedError("Processing cancelled by user")
-        elif self.cleaner_type == CleanerType.E2FGVI_HQ:
+        elif self.cleaner_type in [CleanerType.E2FGVI, CleanerType.E2FGVI_HQ]:
             ## 2. E2FGVI_HQ Cleaner Strategy with overlap blending.
             input_video_loader = VideoLoader(input_video_path)
             frame_counter = 0
@@ -381,7 +381,9 @@ class SoraWM:
     def merge_audio_track(
         self, input_video_path: Path, temp_output_path: Path, output_video_path: Path
     ):
-        logger.info("Merging audio track...")
+        logger.info(f"Merging audio track to: {output_video_path}")
+        logger.info(f"Temp file exists: {temp_output_path.exists()}")
+
         video_stream = ffmpeg.input(str(temp_output_path))
         audio_stream = ffmpeg.input(str(input_video_path)).audio
 
@@ -396,8 +398,20 @@ class SoraWM:
             .overwrite_output()
             .run(quiet=True, cmd=_FFMPEG_BIN)
         )
-        temp_output_path.unlink()
-        logger.info(f"Saved no watermark video with audio at: {output_video_path}")
+
+        # Verify output file was created
+        if output_video_path.exists():
+            file_size = output_video_path.stat().st_size
+            logger.info(f"✓ Successfully saved video at: {output_video_path}")
+            logger.info(f"✓ File size: {file_size / (1024*1024):.2f} MB")
+        else:
+            logger.error(f"✗ Failed to save video at: {output_video_path}")
+            raise RuntimeError(f"Output file was not created at: {output_video_path}")
+
+        # Clean up temp file
+        if temp_output_path.exists():
+            temp_output_path.unlink()
+            logger.info("✓ Cleaned up temporary file")
 
 
 if __name__ == "__main__":
