@@ -1,157 +1,50 @@
-# SoraWatermarkCleaner
+# Image Watermark Remover
 
-English | [中文](README-zh.md) 
+English | [中文](README-zh.md)
 
-This project provides an elegant way to remove the sora watermark in the sora2 generated videos. 
+This project provides an elegant way to remove watermarks from images using AI-powered inpainting models.
 
+## Features
 
+- **AI-Powered Watermark Detection**: Automatically detects watermarks using YOLOv11
+- **Multiple Inpainting Models**: Choose between LAMA and MAT models for best results
+- **High Quality Results**: Advanced image inpainting for seamless watermark removal
+- **Easy to Use**: Simple Python API and command-line interface
 
+## Method
 
+The Image Watermark Remover consists of two parts:
 
-<table>
-  <tr>
-    <td width="20%">
-      <strong>Case1(25s)</strong>
-    </td>
-    <td width="80%">
-      <video src="https://github.com/user-attachments/assets/55f4e822-a356-4fab-a372-8910e4cb3c28" 
-             width="100%" controls></video>
-    </td>
-  </tr>
-  <tr>
-    <td>
-      <strong>Case2(10s)</strong>
-    </td>
-    <td>
-      <video src="https://github.com/user-attachments/assets/2773df41-62dc-4876-bd2f-4dd3ccac4b9e" 
-             width="100%" controls></video>
-    </td>
-  </tr>
-  <tr>
-    <td>
-      <strong>Case3(10s)</strong>
-    </td>
-    <td>
-      <video src="https://github.com/user-attachments/assets/2bdba310-6379-48f2-a93c-6de857c4df3d" 
-             width="100%" controls></video>
-    </td>
-  </tr>
-</table>
+- **WatermarkDetector**: Uses a trained YOLOv11s model to detect watermarks in images
+- **WatermarkCleaner**: Uses advanced inpainting models (LAMA or MAT) to remove detected watermarks
 
-⭐️: 
+Our solution is purely deep learning driven and yields excellent results on various images.
 
-- **I'm excited to release [DeMark-World](https://github.com/linkedlist771/DeMark-World) – to the best of my knowledge, the first model capable of removing any watermark from AI-generated videos.**
+## Installation
 
-- **We have provided another model which could preserve time consistency without flicker!**
+### Python Environment
 
-- **We support batch processing now.**
-- **For the new watermark with username,  the Yolo weights has been updated, try the new version watermark detect model, it should work better.**
+We highly recommend using `uv` to install the environment:
 
-- **We have uploaded the labelled datasets into huggingface, check this [dataset](https://huggingface.co/datasets/LLinked/sora-watermark-dataset) out. Free free to train your custom detector model or improve our model!**
-
-- **One-click portable build is available** — [Download here](#3-one-click-portable-version) for Windows users! No installation required.
-
----
-
-💝 If you find this project helpful, please consider [buying me a coffee](mds/reward.md) to support the development!
-
-## 1. Method
-
-The SoraWatermarkCleaner(we call it `SoraWm` later) is composed of two parsts:
-
-- SoraWaterMarkDetector: We trained a yolov11s version to detect the sora watermark. (Thank you yolo!)
-
-- WaterMarkCleaner: We refer iopaint's implementation for watermark removal using the lama model.
-
-  (This codebase is from https://github.com/Sanster/IOPaint#, thanks for their amazing work!)
-
-Our SoraWm is purely deeplearning driven and yields good results in many generated videos.
-
-
-
-## 2. Installation
-
-### 2.1 FFmpeg Setup
-
-[FFmpeg](https://ffmpeg.org/) is required for video processing. You have two options:
-
-#### Option 1: Portable FFmpeg (Recommended)
-Place FFmpeg executables directly in the project for a portable setup:
-1. Download FFmpeg from [FFmpeg-Builds](https://github.com/BtbN/FFmpeg-Builds/releases) (Windows) or [FFmpeg.org](https://ffmpeg.org/download.html)
-2. Extract and copy `ffmpeg.exe` and `ffprobe.exe` to the `ffmpeg/` directory
-3. Verify setup: `python test_ffmpeg_setup.py`
-
-See [ffmpeg/README.md](ffmpeg/README.md) for detailed instructions.
-
-#### Option 2: System-wide Installation
-Install FFmpeg system-wide and add it to your PATH. The project will automatically detect and use it.
-
-### 2.2 Python Environment
-
-We highly recommend using `uv` to install the environments:
-
-1. installation:
+1. Installation:
 
 ```bash
 uv sync
 ```
 
-> now the envs will be installed at the `.venv`, you can activate the env using:
+> The environment will be installed at `.venv`. You can activate it using:
 >
 > ```bash
 > source .venv/bin/activate
 > ```
 
-2. Downloaded the pretrained models:
+2. Download pretrained models:
 
-The trained yolo weights will be stored in the `resources` dir as the `best.pt`.  And it will be automatically download from https://github.com/linkedlist771/SoraWatermarkCleaner/releases/download/V0.0.1/best.pt . The `Lama` model is downloaded from https://github.com/Sanster/models/releases/download/add_big_lama/big-lama.pt, and will be stored in the torch cache dir. Both downloads are automatic, if you fail, please check your internet status.
+The trained YOLO weights will be stored in the `resources` directory as `best.pt`. It will be automatically downloaded from the project releases. The LAMA model is downloaded from the IOPaint project and will be stored in the torch cache directory. Both downloads are automatic; if they fail, please check your internet connection.
 
-3. Batch processing
-Use the cli.py for batch processing
+## Demo
 
-```
-python cli.py [-h] -i INPUT -o OUTPUT [-p PATTERN] [--quiet]
-```
-
-examples:
-
-```
-# Process all .mp4 files in input folder
-python batch_process.py -i /path/to/input -o /path/to/output
-# Process all .mov files
-python batch_process.py -i /path/to/input -o /path/to/output --pattern "*.mov"
-# Process all video files (mp4, mov, avi)
-python batch_process.py -i /path/to/input -o /path/to/output --pattern "*.{mp4,mov,avi}"
-# Without displaying the Tqdm bar inside sorawm procrssing.
-python batch_process.py -i /path/to/input -o /path/to/output --quiet
-```
-
-## 3. One-Click Portable Version
-
-For users who prefer a ready-to-use solution without manual installation, we provide a **one-click portable distribution** that includes all dependencies pre-configured.
-
-### Download Links
-
-**Google Drive:**
-- [Download from Google Drive](https://drive.google.com/file/d/1ujH28aHaCXGgB146g6kyfz3Qxd-wHR1c/view?usp=share_link)
-
-**Baidu Pan (百度网盘) - For users in China:**
-- Link: https://pan.baidu.com/s/1onMom81mvw2c6PFkCuYzdg?pwd=jusu
-- Extract Code (提取码): `jusu`
-
-### Features
-- ✅ No installation required
-- ✅ All dependencies included
-- ✅ Pre-configured environment
-- ✅ Ready to use out of the box
-
-Simply download, extract, and run!
-
-## 4.  Demo
-
-To have a basic usage, just try the `example.py`:
-
-> We provide two models to remove watermark. LAMA is fast but may have flicker on the cleaned area, which E2FGVI_HQ compromise this only requires cuda otherwise very slow on CPU or MPS.
+To have a basic usage, try the `example.py`:
 
 ```python
 from pathlib import Path
@@ -160,94 +53,104 @@ from sorawm.core import SoraWM
 from sorawm.schemas import CleanerType
 
 if __name__ == "__main__":
-    input_video_path = Path("resources/dog_vs_sam.mp4")
-    output_video_path = Path("outputs/sora_watermark_removed")
-    
-    # 1. LAMA is fast and good quality, but not time consistent.
+    input_image_path = Path("resources/watermark_template.png")
+    output_image_path = Path("outputs/watermark_removed")
+
+    # 1. LAMA is fast and provides good quality results
     sora_wm = SoraWM(cleaner_type=CleanerType.LAMA)
-    sora_wm.run(input_video_path, f"{output_video_path}_lama.mp4")
-    
-    # 2. E2FGVI_HQ ensures time consistency, but will be very slow on no-cuda device.
-    sora_wm = SoraWM(cleaner_type=CleanerType.E2FGVI_HQ)
-    sora_wm.run(input_video_path, f"{output_video_path}_e2fgvi_hq.mp4")
+    sora_wm.run_image(input_image_path, Path(f"{output_image_path}_lama.png"))
 
+    # 2. MAT is another option for image inpainting
+    sora_wm = SoraWM(cleaner_type=CleanerType.MAT)
+    sora_wm.run_image(input_image_path, Path(f"{output_image_path}_mat.png"))
 ```
 
-We also provide you with a `streamlit` based interactive web page, try it with:
+## API Usage
 
-> We also provide the switch here.
+### Basic Usage
 
-```bash
-streamlit run app.py
+```python
+from pathlib import Path
+from sorawm.core import SoraWM
+from sorawm.schemas import CleanerType
+
+# Initialize with your preferred model
+watermark_remover = SoraWM(cleaner_type=CleanerType.LAMA)
+
+# Remove watermark from an image
+watermark_remover.run_image(
+    input_image_path=Path("input.jpg"),
+    output_image_path=Path("output.jpg")
+)
 ```
 
-<img src="assests/model_switch.png" style="zoom: 25%;" />
+### Advanced Usage with Manual Bounding Box
 
-Batch processing is also supported, now you can drag a folder or select multiple files to process.
-<img src="assests/streamlit_batch.png" style="zoom: 50%;" />
+```python
+# If you know the watermark location, you can specify it manually
+watermark_remover.run_image(
+    input_image_path=Path("input.jpg"),
+    output_image_path=Path("output.jpg"),
+    manual_bbox=(100, 100, 200, 150)  # (x1, y1, x2, y2)
+)
 
-
-## 5. WebServer
-
-Here, we provide a **FastAPI-based web server** that can quickly turn this watermark remover into a service.
-
-Simply run:
-
+# For multiple watermarks
+watermark_remover.run_image(
+    input_image_path=Path("input.jpg"),
+    output_image_path=Path("output.jpg"),
+    manual_bbox=[(100, 100, 200, 150), (300, 300, 400, 350)]
+)
 ```
-python start_server.py
+
+### Progress Callback
+
+```python
+def progress_handler(progress: int):
+    print(f"Progress: {progress}%")
+
+watermark_remover.run_image(
+    input_image_path=Path("input.jpg"),
+    output_image_path=Path("output.jpg"),
+    progress_callback=progress_handler
+)
 ```
 
-The web server will start on port **5344**.
+## Available Models
 
-You can view the FastAPI [documentation](http://localhost:5344/docs) for more details.
+### LAMA (Default)
+- **Speed**: Fast
+- **Quality**: Good
+- **Best for**: General purpose watermark removal
+- **Description**: Large Mask Inpainting model, provides excellent results with quick processing
 
-There are three routes available:
+### MAT
+- **Speed**: Moderate
+- **Quality**: Good
+- **Best for**: Alternative inpainting approach
+- **Description**: Mask-Aware Transformer for high-quality image inpainting
 
-1. **submit_remove_task**
+## Datasets
 
-   > After uploading a video, a task ID will be returned, and the video will begin processing immediately.
+The labeled datasets are available on Hugging Face: [sora-watermark-dataset](https://huggingface.co/datasets/LLinked/sora-watermark-dataset). Feel free to train your custom detector model or improve our model!
 
-<img src="resources/53abf3fd-11a9-4dd7-a348-34920775f8ad.png" alt="image" style="zoom: 25%;" />
+## License
 
-2. **get_results**
+Apache License
 
-You can use the task ID obtained above to check the task status.
-
-It will display the percentage of video processing completed.
-
-Once finished, the returned data will include a **download URL**.
-
-3. **download**
-
-You can use the **download URL** from step 2 to retrieve the cleaned video.
-
-## 6. Datasets
-
-We have uploaded the labelled datasets into huggingface, check this out https://huggingface.co/datasets/LLinked/sora-watermark-dataset. Free free to train your custom detector model or improve our model!
-
-## 7. API
-
-Packaged as a Cog and [published to Replicate](https://replicate.com/uglyrobot/sora2-watermark-remover) for simple API based usage.
-
-## 8. License
-
- Apache License
-
-
-## 9. Citation
+## Citation
 
 If you use this project, please cite:
 
 ```bibtex
-@misc{sorawatermarkcleaner2025,
+@misc{imagewatermarkremover2025,
   author = {linkedlist771},
-  title = {SoraWatermarkCleaner},
+  title = {Image Watermark Remover},
   year = {2025},
   url = {https://github.com/linkedlist771/SoraWatermarkCleaner}
 }
 ```
 
-## 10. Acknowledgments
+## Acknowledgments
 
-- [IOPaint](https://github.com/Sanster/IOPaint) for the LAMA implementation
+- [IOPaint](https://github.com/Sanster/IOPaint) for the LAMA and MAT implementation
 - [Ultralytics YOLO](https://github.com/ultralytics/ultralytics) for object detection

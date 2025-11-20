@@ -4,8 +4,6 @@ from typing import List
 
 import numpy as np
 
-from sorawm.cleaner.e2fgvi_cleaner import E2FGVICleaner
-from sorawm.cleaner.e2fgvi_hq_cleaner import E2FGVIHDCleaner
 from sorawm.cleaner.lama_cleaner import LamaCleaner
 from sorawm.cleaner.mat_cleaner import MATCleaner
 from sorawm.schemas import CleanerType
@@ -21,9 +19,5 @@ class WaterMarkCleaner:
                 return LamaCleaner()
             case CleanerType.MAT:
                 return MATCleaner()
-            case CleanerType.E2FGVI:
-                return E2FGVICleaner()
-            case CleanerType.E2FGVI_HQ:
-                return E2FGVIHDCleaner()
             case _:
                 raise ValueError(f"Invalid cleaner type: {cleaner_type}")

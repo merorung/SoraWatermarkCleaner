@@ -4,13 +4,13 @@ from sorawm.core import SoraWM
 from sorawm.schemas import CleanerType
 
 if __name__ == "__main__":
-    input_video_path = Path("resources/dog_vs_sam.mp4")
-    output_video_path = Path("outputs/sora_watermark_removed")
-    
-    # 1. LAMA is fast and good quality, but not time consistent.
+    input_image_path = Path("resources/watermark_template.png")
+    output_image_path = Path("outputs/watermark_removed")
+
+    # 1. LAMA is fast and good quality
     sora_wm = SoraWM(cleaner_type=CleanerType.LAMA)
-    sora_wm.run(input_video_path, f"{output_video_path}_lama.mp4")
-    
-    # 2. E2FGVI_HQ ensures time consistency, but will be very slow on no-cuda device.
-    sora_wm = SoraWM(cleaner_type=CleanerType.E2FGVI_HQ)
-    sora_wm.run(input_video_path, f"{output_video_path}_e2fgvi_hq.mp4")
+    sora_wm.run_image(input_image_path, Path(f"{output_image_path}_lama.png"))
+
+    # 2. MAT is another option for image inpainting
+    sora_wm = SoraWM(cleaner_type=CleanerType.MAT)
+    sora_wm.run_image(input_image_path, Path(f"{output_image_path}_mat.png"))
