@@ -27,6 +27,7 @@ class WatermarkCleanerGUI:
         self.output_path = None
         self.sora_wm = None
         self.processing = False
+        self.cancel_requested = False  # Flag for cancellation
         self.has_gpu = torch.cuda.is_available()
         self.manual_bbox = None  # (x1, y1, x2, y2) for manual selection
 
@@ -213,9 +214,12 @@ class WatermarkCleanerGUI:
         )
         self.progress_bar.pack(fill=tk.X)
 
-        # Process button
+        # Process and Cancel buttons
+        button_frame = tk.Frame(content_frame)
+        button_frame.pack(fill=tk.X)
+
         self.process_btn = tk.Button(
-            content_frame,
+            button_frame,
             text="🚀 워터마크 제거하기",
             command=self.process_video,
             font=("맑은 고딕", 12, "bold"),
@@ -224,7 +228,20 @@ class WatermarkCleanerGUI:
             height=2,
             cursor="hand2"
         )
-        self.process_btn.pack(fill=tk.X)
+        self.process_btn.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
+
+        self.cancel_btn = tk.Button(
+            button_frame,
+            text="⏹ 취소",
+            command=self.cancel_processing,
+            font=("맑은 고딕", 12, "bold"),
+            bg="#e74c3c",
+            fg="white",
+            height=2,
+            cursor="hand2",
+            state=tk.DISABLED
+        )
+        self.cancel_btn.pack(side=tk.RIGHT, fill=tk.X, expand=True, padx=(5, 0))
 
     def select_input_file(self):
         filename = filedialog.askopenfilename(
@@ -663,8 +680,22 @@ class WatermarkCleanerGUI:
         if hasattr(self, 'selection_window'):
             self.selection_window.destroy()
 
+    def cancel_processing(self):
+        """Request cancellation of processing"""
+        result = messagebox.askyesno(
+            "취소 확인",
+            "정말로 작업을 취소하시겠습니까?\n진행 중인 작업이 중단됩니다."
+        )
+        if result:
+            self.cancel_requested = True
+            self.progress_label.config(text="⏹ 취소 중...", fg="orange")
+
     def update_progress(self, progress: int):
         """Callback function for progress updates"""
+        # Check for cancellation
+        if self.cancel_requested:
+            return False  # Signal to stop processing
+
         self.progress_bar['value'] = progress
 
         if progress < 50:
@@ -676,6 +707,7 @@ class WatermarkCleanerGUI:
 
         self.progress_label.config(text=status, fg="blue")
         self.root.update_idletasks()
+        return True  # Continue processing
 
     def process_video_thread(self):
         """Process video in a separate thread"""
@@ -685,6 +717,10 @@ class WatermarkCleanerGUI:
                 self.progress_label.config(text="모델 로딩 중...", fg="blue")
                 self.root.update_idletasks()
                 self.sora_wm = SoraWM(cleaner_type=CleanerType(self.model_var.get()))
+
+            # Check cancellation before starting
+            if self.cancel_requested:
+                raise InterruptedError("작업이 취소되었습니다.")
 
             # Process the video
             if self.detection_mode.get() == "manual" and self.manual_bbox:
@@ -703,6 +739,10 @@ class WatermarkCleanerGUI:
                     progress_callback=self.update_progress
                 )
 
+            # Check if cancelled during processing
+            if self.cancel_requested:
+                raise InterruptedError("작업이 취소되었습니다.")
+
             # Success
             self.progress_bar['value'] = 100
             self.progress_label.config(text="✅ 처리 완료!", fg="green")
@@ -712,13 +752,35 @@ class WatermarkCleanerGUI:
                 f"워터마크가 성공적으로 제거되었습니다!\n\n저장 위치:\n{self.output_path}"
             )
 
+        except InterruptedError as e:
+            # Clean up partial output
+            if self.output_path and self.output_path.exists():
+                try:
+                    self.output_path.unlink()
+                except:
+                    pass
+            # Clean up temp file
+            if self.output_path:
+                temp_output = self.output_path.parent / f"temp_{self.output_path.name}"
+                if temp_output.exists():
+                    try:
+                        temp_output.unlink()
+                    except:
+                        pass
+
+            self.progress_bar['value'] = 0
+            self.progress_label.config(text="⏹ 작업이 취소되었습니다.", fg="orange")
+            messagebox.showinfo("취소됨", str(e))
+
         except Exception as e:
             self.progress_label.config(text=f"❌ 오류: {str(e)}", fg="red")
             messagebox.showerror("오류", f"오류가 발생했습니다:\n\n{str(e)}")
 
         finally:
             self.processing = False
+            self.cancel_requested = False
             self.process_btn.config(state=tk.NORMAL, bg="#27ae60")
+            self.cancel_btn.config(state=tk.DISABLED)
 
     def process_video(self):
         # Validation
@@ -756,7 +818,9 @@ class WatermarkCleanerGUI:
 
         # Start processing in a separate thread
         self.processing = True
+        self.cancel_requested = False
         self.process_btn.config(state=tk.DISABLED, bg="gray")
+        self.cancel_btn.config(state=tk.NORMAL)
         self.progress_bar['value'] = 0
 
         thread = threading.Thread(target=self.process_video_thread, daemon=True)

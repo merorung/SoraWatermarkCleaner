@@ -157,7 +157,8 @@ class SoraWM:
                     frame_bboxes[idx] = {"bbox": manual_bbox}
             # Skip detection progress and jump directly to 50%
             if progress_callback:
-                progress_callback(50)
+                if progress_callback(50) == False:
+                    raise InterruptedError("Processing cancelled by user")
         else:
             # Auto detection mode
             for idx, frame in enumerate(
@@ -183,7 +184,8 @@ class SoraWM:
                 # 10% - 50%
                 if progress_callback and idx % 10 == 0:
                     progress = 10 + int((idx / total_frames) * 40)
-                    progress_callback(progress)
+                    if progress_callback(progress) == False:
+                        raise InterruptedError("Processing cancelled by user")
         if not quiet:
             logger.debug(f"detect missed frames: {detect_missed}")
         bkps_full = [0, total_frames]
@@ -275,7 +277,8 @@ class SoraWM:
                 # 50% - 95%
                 if progress_callback and idx % 10 == 0:
                     progress = 50 + int((idx / total_frames) * 45)
-                    progress_callback(progress)
+                    if progress_callback(progress) == False:
+                        raise InterruptedError("Processing cancelled by user")
         elif self.cleaner_type == CleanerType.E2FGVI_HQ:
             ## 2. E2FGVI_HQ Cleaner Strategy with overlap blending.
             input_video_loader = VideoLoader(input_video_path)
@@ -329,7 +332,8 @@ class SoraWM:
                 # 50% - 95% range
                 if progress_callback:
                     progress = 50 + int((segment_idx / num_segments) * 45)
-                    progress_callback(progress)
+                    if progress_callback(progress) == False:
+                        raise InterruptedError("Processing cancelled by user")
 
                 cleaned_frames = self.cleaner.clean(frames, masks)
                 
@@ -357,19 +361,22 @@ class SoraWM:
                         # 50% - 95%
                         if progress_callback and frame_counter % 10 == 0:
                             progress = 50 + int((frame_counter / total_frames) * 45)
-                            progress_callback(progress)
+                            if progress_callback(progress) == False:
+                                raise InterruptedError("Processing cancelled by user")
 
         process_out.stdin.close()
         process_out.wait()
 
         # 95% - 99%
         if progress_callback:
-            progress_callback(95)
+            if progress_callback(95) == False:
+                raise InterruptedError("Processing cancelled by user")
 
         self.merge_audio_track(input_video_path, temp_output_path, output_video_path)
 
         if progress_callback:
-            progress_callback(99)
+            if progress_callback(99) == False:
+                raise InterruptedError("Processing cancelled by user")
 
     def merge_audio_track(
         self, input_video_path: Path, temp_output_path: Path, output_video_path: Path
